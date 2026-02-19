@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model CIAPaper {
+  id            Int      @id @default(autoincrement())
+  academicYear  String
+  ciaType       String   // CIA 1, 2, 3
+  courseCode    String
+  courseTitle   String
+  programme     String
+  semester      String
+  date          String
+  session       String
+  maxMarks      Int      @default(60)
+  filePath      String?
+  createdAt     DateTime @default(now())
+  questions     Question[]
+}
+
+model Question {
+  id        Int      @id @default(autoincrement())
+  paperId   Int
+  paper     CIAPaper @relation(fields: paperId, references: id)
+  part      String   // A or B
+  qNo       String   // 1, 2, ..., 7a, 7b, ...
+  text      String
+  co        String   // CO1-CO5
+  btl       String   // L1-L4
+  marks     Int
+}
