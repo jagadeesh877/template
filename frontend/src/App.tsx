@@ -5,6 +5,25 @@ import { Download, Plus, Trash2, FileText, CheckCircle } from 'lucide-react';
 const CO_OPTIONS = ['CO1', 'CO2', 'CO3', 'CO4', 'CO5'];
 const BTL_OPTIONS = ['L1', 'L2', 'L3', 'L4'];
 
+interface Subdivision {
+    label: string;
+    text: string;
+    marks: string;
+}
+
+interface PartBQuestion {
+    text: string;
+    subdivisions: Subdivision[];
+    co: string;
+    btl: string;
+}
+
+interface PartBGroup {
+    qNo: string;
+    a: PartBQuestion;
+    b: PartBQuestion;
+}
+
 function App() {
     const [header, setHeader] = useState({
         academicYear: '2025 – 26',
@@ -28,16 +47,33 @@ function App() {
         }))
     );
 
-    const [partB, setPartB] = useState(
+    const [partB, setPartB] = useState<PartBGroup[]>(
         [7, 8, 9].map(qNo => ({
             qNo: `${qNo}`,
-            a: { text: '', co: 'CO1', btl: 'L1' },
-            b: { text: '', co: 'CO1', btl: 'L1' },
+            a: {
+                text: '',
+                subdivisions: [],
+                co: 'CO1',
+                btl: 'L1'
+            },
+            b: {
+                text: '',
+                subdivisions: [],
+                co: 'CO1',
+                btl: 'L1'
+            },
         }))
     );
 
     const [loading, setLoading] = useState(false);
     const [pdfUrl, setPdfUrl] = useState('');
+    const [wordUrl, setWordUrl] = useState('');
+
+    const generateFileName = () => {
+        const { courseCode, courseTitle, ciaType } = header;
+        const base = `${courseCode}-${courseTitle}-CIA${ciaType}`.trim();
+        return base.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, ' ');
+    };
 
     const handleHeaderChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         setHeader({ ...header, [e.target.name]: e.target.value });
@@ -49,24 +85,61 @@ function App() {
         setPartA(newPartA);
     };
 
-    const handlePartBChange = (index: number, sub: 'a' | 'b', field: string, value: string) => {
+    const handlePartBSubChange = (qIndex: number, sub: 'a' | 'b', field: string, value: string) => {
         const newPartB = [...partB];
-        const target = sub === 'a' ? newPartB[index].a : newPartB[index].b;
-        const updatedSub = { ...target, [field]: value };
-        newPartB[index] = { ...newPartB[index], [sub]: updatedSub };
+        newPartB[qIndex][sub] = { ...newPartB[qIndex][sub], [field]: value };
+        setPartB(newPartB);
+    };
+
+    const handleAddSubdivision = (qIndex: number, sub: 'a' | 'b') => {
+        const newPartB = [...partB];
+        // If switching from normal to subdivision for the first time
+        if (newPartB[qIndex][sub].subdivisions.length === 0) {
+            newPartB[qIndex][sub].subdivisions.push({ label: 'i)', text: newPartB[qIndex][sub].text, marks: '8' });
+            newPartB[qIndex][sub].text = ''; // Clear main text as it's now in first subdivision
+        } else {
+            newPartB[qIndex][sub].subdivisions.push({ label: '', text: '', marks: '8' });
+        }
+        setPartB(newPartB);
+    };
+
+    const handleRemoveSubdivision = (qIndex: number, sub: 'a' | 'b', subIndex: number) => {
+        const newPartB = [...partB];
+        const subList = newPartB[qIndex][sub].subdivisions;
+
+        if (subList.length === 1) {
+            // Reverting to normal mode
+            newPartB[qIndex][sub].text = subList[0].text;
+            newPartB[qIndex][sub].subdivisions = [];
+        } else {
+            subList.splice(subIndex, 1);
+        }
+        setPartB(newPartB);
+    };
+
+    const handleSubdivisionChange = (qIndex: number, sub: 'a' | 'b', subIndex: number, field: string, value: string) => {
+        const newPartB = [...partB];
+        newPartB[qIndex][sub].subdivisions[subIndex] = {
+            ...newPartB[qIndex][sub].subdivisions[subIndex],
+            [field]: value
+        };
         setPartB(newPartB);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+        setPdfUrl('');
+        setWordUrl('');
         try {
             const response = await axios.post('http://172.27.53.175:5000/api/papers', {
                 header,
                 partA,
                 partB,
+                fileName: generateFileName()
             });
             setPdfUrl(`http://172.27.53.175:5000${response.data.pdfUrl}`);
+            setWordUrl(`http://172.27.53.175:5000${response.data.wordUrl}`);
         } catch (error: any) {
             console.error('Error generating paper:', error);
             const msg = error.response?.data?.error || error.message || 'Failed to generate paper';
@@ -84,15 +157,26 @@ function App() {
                         <h1 className="text-2xl font-bold text-white flex items-center">
                             <FileText className="mr-2" /> CIA Question Paper Generator
                         </h1>
-                        {pdfUrl && (
-                            <a
-                                href={pdfUrl}
-                                download
-                                className="flex items-center bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md font-medium transition"
-                            >
-                                <Download className="mr-2 h-5 w-5" /> Download PDF
-                            </a>
-                        )}
+                        <div className="flex space-x-3">
+                            {pdfUrl && (
+                                <a
+                                    href={pdfUrl}
+                                    download={`${generateFileName()}.pdf`}
+                                    className="flex items-center bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md font-medium transition text-sm"
+                                >
+                                    <Download className="mr-2 h-4 w-4" /> PDF
+                                </a>
+                            )}
+                            {wordUrl && (
+                                <a
+                                    href={wordUrl}
+                                    download={`${generateFileName()}.docx`}
+                                    className="flex items-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md font-medium transition text-sm"
+                                >
+                                    <Download className="mr-2 h-4 w-4" /> Word
+                                </a>
+                            )}
+                        </div>
                     </div>
 
                     <form onSubmit={handleSubmit} className="p-8 space-y-8">
@@ -180,43 +264,78 @@ function App() {
                             <h2 className="text-lg font-semibold text-gray-800 border-b pb-2">PART B (3 × 16 Marks – Either/Or)</h2>
                             <div className="space-y-6">
                                 {partB.map((group, i) => (
-                                    <div key={i} className="space-y-3 p-4 bg-blue-50/30 rounded-lg border border-blue-100">
-                                        <h3 className="font-bold text-blue-800">Question {group.qNo} (Either or)</h3>
-                                        <div className="space-y-4">
-                                            <div className="grid grid-cols-12 gap-3 items-end">
-                                                <div className="col-span-1 font-semibold text-gray-600 pb-2">(a)</div>
-                                                <div className="col-span-11 md:col-span-7">
-                                                    <textarea placeholder="Question Text" value={group.a.text} onChange={(e) => handlePartBChange(i, 'a', 'text', e.target.value)} rows={2} className="block w-full border-gray-300 rounded-md shadow-sm sm:text-sm border p-2" required />
-                                                </div>
-                                                <div className="col-span-6 md:col-span-2">
-                                                    <select value={group.a.co} onChange={(e) => handlePartBChange(i, 'a', 'co', e.target.value)} className="block w-full border-gray-300 rounded-md shadow-sm sm:text-sm border p-2">
-                                                        {CO_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                                    </select>
-                                                </div>
-                                                <div className="col-span-6 md:col-span-2">
-                                                    <select value={group.a.btl} onChange={(e) => handlePartBChange(i, 'a', 'btl', e.target.value)} className="block w-full border-gray-300 rounded-md shadow-sm sm:text-sm border p-2">
-                                                        {BTL_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                                    </select>
-                                                </div>
-                                            </div>
-                                            <div className="text-center text-xs font-bold text-gray-400">--- OR ---</div>
-                                            <div className="grid grid-cols-12 gap-3 items-end">
-                                                <div className="col-span-1 font-semibold text-gray-600 pb-2">(b)</div>
-                                                <div className="col-span-11 md:col-span-7">
-                                                    <textarea placeholder="Question Text" value={group.b.text} onChange={(e) => handlePartBChange(i, 'b', 'text', e.target.value)} rows={2} className="block w-full border-gray-300 rounded-md shadow-sm sm:text-sm border p-2" required />
-                                                </div>
-                                                <div className="col-span-6 md:col-span-2">
-                                                    <select value={group.b.co} onChange={(e) => handlePartBChange(i, 'b', 'co', e.target.value)} className="block w-full border-gray-300 rounded-md shadow-sm sm:text-sm border p-2">
-                                                        {CO_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                                    </select>
-                                                </div>
-                                                <div className="col-span-6 md:col-span-2">
-                                                    <select value={group.b.btl} onChange={(e) => handlePartBChange(i, 'b', 'btl', e.target.value)} className="block w-full border-gray-300 rounded-md shadow-sm sm:text-sm border p-2">
-                                                        {BTL_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                                    </select>
-                                                </div>
-                                            </div>
+                                    <div key={i} className="space-y-4 p-5 bg-blue-50/20 rounded-xl border border-blue-100 shadow-sm">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <h3 className="font-bold text-blue-900 text-lg">Question {group.qNo}</h3>
                                         </div>
+
+                                        {(['a', 'b'] as const).map((sub) => (
+                                            <div key={sub} className="space-y-3">
+                                                <div className="flex justify-between items-end bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                                                    <div className="flex items-center space-x-2">
+                                                        <span className="font-bold text-xl text-blue-800">({sub})</span>
+                                                        <div className="flex space-x-2">
+                                                            <div className="w-24">
+                                                                <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">CO</label>
+                                                                <select value={group[sub].co} onChange={(e) => handlePartBSubChange(i, sub, 'co', e.target.value)} className="block w-full border-gray-200 rounded-md text-xs border p-1.5 focus:ring-blue-500">
+                                                                    {CO_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                                </select>
+                                                            </div>
+                                                            <div className="w-20">
+                                                                <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">BTL</label>
+                                                                <select value={group[sub].btl} onChange={(e) => handlePartBSubChange(i, sub, 'btl', e.target.value)} className="block w-full border-gray-200 rounded-md text-xs border p-1.5 focus:ring-blue-500">
+                                                                    {BTL_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <button type="button" onClick={() => handleAddSubdivision(i, sub)} className="flex items-center text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition font-medium">
+                                                        <Plus className="w-3 h-3 mr-1" /> Add Subdivision
+                                                    </button>
+                                                </div>
+
+                                                <div className="space-y-2 pl-6">
+                                                    {group[sub].subdivisions.length === 0 ? (
+                                                        <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm">
+                                                            <label className="block text-[10px] text-gray-400 mb-1 uppercase font-bold">Question Content (Normal Mode)</label>
+                                                            <textarea
+                                                                value={group[sub].text}
+                                                                onChange={(e) => handlePartBSubChange(i, sub, 'text', e.target.value)}
+                                                                rows={3}
+                                                                placeholder="Enter full question text here..."
+                                                                className="w-full border-gray-200 rounded text-sm border p-2 focus:ring-blue-500"
+                                                                required
+                                                            />
+                                                        </div>
+                                                    ) : (
+                                                        group[sub].subdivisions.map((sd: any, sdIdx: number) => (
+                                                            <div key={sdIdx} className="grid grid-cols-12 gap-2 items-start bg-white p-3 rounded-md border border-gray-100 shadow-sm group">
+                                                                <div className="col-span-1">
+                                                                    <label className="block text-[10px] text-gray-400 mb-1">Label</label>
+                                                                    <input type="text" placeholder="i)" value={sd.label} onChange={(e) => handleSubdivisionChange(i, sub, sdIdx, 'label', e.target.value)} className="w-full border-gray-200 rounded text-sm border p-1.5 focus:ring-blue-500" />
+                                                                </div>
+                                                                <div className="col-span-8">
+                                                                    <label className="block text-[10px] text-gray-400 mb-1">Content</label>
+                                                                    <textarea value={sd.text} onChange={(e) => handleSubdivisionChange(i, sub, sdIdx, 'text', e.target.value)} rows={2} className="w-full border-gray-200 rounded text-sm border p-1.5 focus:ring-blue-500" required />
+                                                                </div>
+                                                                <div className="col-span-2">
+                                                                    <label className="block text-[10px] text-gray-400 mb-1">Marks</label>
+                                                                    <select value={sd.marks} onChange={(e) => handleSubdivisionChange(i, sub, sdIdx, 'marks', e.target.value)} className="w-full border-gray-200 rounded text-sm border p-1.5 focus:ring-blue-500">
+                                                                        {[16, 12, 10, 8, 6, 4].map(m => <option key={m} value={m}>{m}</option>)}
+                                                                    </select>
+                                                                </div>
+                                                                <div className="col-span-1 pt-6 text-right">
+                                                                    <button type="button" onClick={() => handleRemoveSubdivision(i, sub, sdIdx)} className="text-red-400 hover:text-red-600 transition p-1" title="Remove part and revert if last">
+                                                                        <Trash2 className="w-4 h-4" />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    )}
+                                                </div>
+                                                {sub === 'a' && <div className="text-center py-2"><span className="px-4 py-1 bg-gray-100 text-gray-400 text-xs font-bold rounded-full border border-gray-200 uppercase tracking-widest">OR</span></div>}
+                                            </div>
+                                        ))}
                                     </div>
                                 ))}
                             </div>
