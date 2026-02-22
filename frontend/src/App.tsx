@@ -75,19 +75,22 @@ function App() {
         return base.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, ' ');
     };
 
-    const handleHeaderChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        setHeader({ ...header, [e.target.name]: e.target.value });
+    const handleHeaderChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+        const sanitizedValue = e.target.name === 'permittingNotes' ? e.target.value.replace(/[\r\n]+/g, ' ') : e.target.value;
+        setHeader({ ...header, [e.target.name]: sanitizedValue });
     };
 
     const handlePartAChange = (index: number, field: string, value: string) => {
+        const sanitizedValue = field === 'text' ? value.replace(/[\r\n]+/g, ' ') : value;
         const newPartA = [...partA];
-        newPartA[index] = { ...newPartA[index], [field]: value };
+        newPartA[index] = { ...newPartA[index], [field]: sanitizedValue };
         setPartA(newPartA);
     };
 
     const handlePartBSubChange = (qIndex: number, sub: 'a' | 'b', field: string, value: string) => {
+        const sanitizedValue = field === 'text' ? value.replace(/[\r\n]+/g, ' ') : value;
         const newPartB = [...partB];
-        newPartB[qIndex][sub] = { ...newPartB[qIndex][sub], [field]: value };
+        newPartB[qIndex][sub] = { ...newPartB[qIndex][sub], [field]: sanitizedValue };
         setPartB(newPartB);
     };
 
@@ -118,10 +121,11 @@ function App() {
     };
 
     const handleSubdivisionChange = (qIndex: number, sub: 'a' | 'b', subIndex: number, field: string, value: string) => {
+        const sanitizedValue = field === 'text' ? value.replace(/[\r\n]+/g, ' ') : value;
         const newPartB = [...partB];
         newPartB[qIndex][sub].subdivisions[subIndex] = {
             ...newPartB[qIndex][sub].subdivisions[subIndex],
-            [field]: value
+            [field]: sanitizedValue
         };
         setPartB(newPartB);
     };
@@ -132,14 +136,14 @@ function App() {
         setPdfUrl('');
         setWordUrl('');
         try {
-            const response = await axios.post('http://172.27.53.175:5000/api/papers', {
+            const response = await axios.post('http://localhost:5000/api/papers', {
                 header,
                 partA,
                 partB,
                 fileName: generateFileName()
             });
-            setPdfUrl(`http://172.27.53.175:5000${response.data.pdfUrl}`);
-            setWordUrl(`http://172.27.53.175:5000${response.data.wordUrl}`);
+            setPdfUrl(`http://localhost:5000${response.data.pdfUrl}?t=${Date.now()}`);
+            setWordUrl(`http://localhost:5000${response.data.wordUrl}?t=${Date.now()}`);
         } catch (error: any) {
             console.error('Error generating paper:', error);
             const msg = error.response?.data?.error || error.message || 'Failed to generate paper';

@@ -5,7 +5,7 @@ const { PrismaClient } = require('@prisma/client');
 const path = require('path');
 const fs = require('fs');
 const puppeteer = require('puppeteer');
-const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, WidthType, BorderStyle, VerticalAlign, HeightRule, LineRule, TableBorders } = require('docx');
+const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, WidthType, BorderStyle, VerticalAlign, HeightRule, TableBorders } = require('docx');
 
 const prisma = new PrismaClient();
 const app = express();
@@ -162,16 +162,16 @@ const generateHTML = (paper, partA, partB, summary, correctGrandTotal, btlKeys, 
             .address { font-size: 11pt; margin-bottom: 5px; font-weight: bold; }
             .cia-title { font-size: 12pt; font-weight: bold; margin: 10px 0; }
             
-            .metadata-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-weight: bold; font-size: 11pt; }
+            .metadata-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-weight: bold; font-size: 11pt; border: none !important; }
             .metadata-table td { padding: 4px 0; border: none !important; vertical-align: top; }
             
             .part-header { text-align: center; font-weight: bold; margin: 25px 0 5px 0; font-size: 12pt; text-transform: uppercase; }
             .part-a-instruction { text-align: center; font-weight: normal; margin-bottom: 15px; font-size: 11pt; }
             .part-b-instruction { text-align: center; font-weight: bold; margin-bottom: 15px; font-size: 11pt; }
 
-            table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 15px; page-break-inside: auto; break-inside: auto; }
+            table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 15px; border: 1pt solid black; }
             thead { display: table-header-group; }
-            tr { page-break-inside: auto; break-inside: auto; }
+            tr { page-break-inside: avoid; break-inside: avoid; }
             th, td { border: 1pt solid black; padding: 4px 6px; text-align: left; vertical-align: middle; }
             th { text-align: center; font-weight: bold; background-color: #f8f8f8; font-size: 10pt; }
             .center { text-align: center; }
@@ -250,27 +250,37 @@ const generateHTML = (paper, partA, partB, summary, correctGrandTotal, btlKeys, 
         <div class="part-header">PART-B (3 x 16 = 48 Marks)</div>
         <div class="part-b-instruction">Answer either (a) or (b) in each Question</div>
         <table>
+            <colgroup>
+                <col style="width: 8%;">
+                <col style="width: 5%;">
+                <col style="width: 67%;">
+                <col style="width: 10%;">
+                <col style="width: 10%;">
+            </colgroup>
             <thead>
                 <tr>
-                    <th style="width: 8%;">Q. No.</th>
-                    <th style="width: 72%;">Questions</th>
-                    <th style="width: 10%;">CO</th>
-                    <th style="width: 10%;">BTL</th>
+                    <th>Q. No.</th>
+                    <th colspan="2">Questions</th>
+                    <th>CO</th>
+                    <th>BTL</th>
                 </tr>
             </thead>
+            <tfoot style="display: table-footer-group;">
+                <tr><td colspan="5" style="padding: 0; margin: 0; height: 0; border: none; border-top: 1pt solid black;"></td></tr>
+            </tfoot>
             <tbody>
                 ${partB.map(group => {
         const aMarks = group.a.subdivisions.length === 0 ? 16 : group.a.subdivisions.reduce((s, sd) => s + parseInt(sd.marks || 0), 0);
         const bMarks = group.b.subdivisions.length === 0 ? 16 : group.b.subdivisions.reduce((s, sd) => s + parseInt(sd.marks || 0), 0);
 
         return `
-                        <tr>
+                        <tr style="page-break-inside: auto; break-inside: auto;">
                             <td rowspan="3" class="part-b-qbox">${group.qNo}</td>
+                            <td style="text-align: center; vertical-align: middle;">(a)</td>
                             <td class="question-text">
-                                <span style="font-weight: normal; margin-right: 5px;">(a)</span>
                                 ${group.a.subdivisions.length === 0 ?
-                `<div style="display: inline-block; width: calc(100% - 30px); text-align: justify; word-break: normal; overflow-wrap: break-word; line-height: 1.3; hyphens: none; vertical-align: top;">${formatQuestionText(group.a.text)}</div>` :
-                `<div style="display: inline-block; width: calc(100% - 30px); vertical-align: top;">
+                `<div style="display: inline-block; width: 100%; text-align: justify; word-break: normal; overflow-wrap: break-word; line-height: 1.3; hyphens: none; vertical-align: top;">${formatQuestionText(group.a.text)}</div>` :
+                `<div style="display: inline-block; width: 100%; vertical-align: top;">
                                     ${group.a.subdivisions.map(sd => `
                                         <table style="width: 100%; border: none !important; border-collapse: collapse; margin-bottom: 0; table-layout: fixed; line-height: 1.3;">
                                             <tr>
@@ -286,14 +296,14 @@ const generateHTML = (paper, partA, partB, summary, correctGrandTotal, btlKeys, 
                             <td rowspan="3" class="center">${group.a.co}</td>
                             <td rowspan="3" class="center">${group.a.btl}</td>
                         </tr>
-                        <tr class="or-row">
-                            <td style="text-align: center; font-weight: bold;">Or</td>
+                        <tr class="or-row" style="page-break-inside: avoid; break-inside: avoid;">
+                            <td colspan="2" style="text-align: center; font-weight: bold;">Or</td>
                         </tr>
-                        <tr>
+                        <tr style="page-break-inside: auto; break-inside: auto;">
+                            <td style="text-align: center; vertical-align: middle;">(b)</td>
                             <td class="question-text">
-                                <span style="font-weight: normal; margin-right: 5px;">(b)</span>
                                 ${group.b.subdivisions.length === 0 ?
-                `<div style="display: inline-block; width: calc(100% - 30px); text-align: justify; word-break: normal; overflow-wrap: break-word; line-height: 1.3; hyphens: none; vertical-align: top;">${formatQuestionText(group.b.text)}</div>` :
+                `<div style="display: inline-block; width: 100%; text-align: justify; word-break: normal; overflow-wrap: break-word; line-height: 1.3; hyphens: none; vertical-align: top;">${formatQuestionText(group.b.text)}</div>` :
                 `<div style="display: inline-block; width: calc(100% - 30px); vertical-align: top;">
                                     ${group.b.subdivisions.map(sd => `
                                         <table style="width: 100%; border: none !important; border-collapse: collapse; margin-bottom: 0; table-layout: fixed; line-height: 1.3;">
@@ -336,8 +346,8 @@ const generateHTML = (paper, partA, partB, summary, correctGrandTotal, btlKeys, 
 
         return `
                         <tr>
-                            <td rowspan="2" style="text-align: left; font-weight: bold; padding-left: 5px; vertical-align: middle;">${btls[bIdx]}</td>
-                            <td style="font-weight: bold; font-size: 8pt; background-color: #fcfcfc;">Q. No.</td>
+                            <td rowspan="2" style="text-align: center; font-weight: bold; vertical-align: middle;">${btls[bIdx]}</td>
+                            <td style="font-weight: bold; font-size: 8pt; background-color: #fcfcfc; text-align: center;">Q. No.</td>
                             ${cos.map(co => `
                                 <td>${summary[`${btlKey}_${co}_Q`].length > 0 ? summary[`${btlKey}_${co}_Q`].join(',') : ""}</td>
                             `).join('')}
@@ -345,7 +355,7 @@ const generateHTML = (paper, partA, partB, summary, correctGrandTotal, btlKeys, 
                             <td rowspan="2" style="font-weight: bold; vertical-align: middle;">${percentage}</td>
                         </tr>
                         <tr>
-                            <td style="font-weight: bold; font-size: 8pt; background-color: #fcfcfc;">Marks</td>
+                            <td style="font-weight: bold; font-size: 8pt; background-color: #fcfcfc; text-align: center;">Marks</td>
                             ${cos.map(co => `
                                 <td>${summary[`${btlKey}_${co}_M`] > 0 ? summary[`${btlKey}_${co}_M`] : ""}</td>
                             `).join('')}
@@ -353,7 +363,7 @@ const generateHTML = (paper, partA, partB, summary, correctGrandTotal, btlKeys, 
                         </tr>
                     `;
     }).join('')}
-                <tr style="font-weight: bold; background-color: #f2f2f2;">
+                <tr style="font-weight: bold; background-color: #f2f2f2; text-align: center;">
                     <td colspan="2">Total Marks</td>
                     ${cos.map(co => `
                         <td>${summary[`${co}_TOTAL`] > 0 ? summary[`${co}_TOTAL`] : ""}</td>
@@ -434,86 +444,28 @@ const generateWord = async (paper, partA, partB, summary, correctGrandTotal, btl
     const noBorder = { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } };
 
     // Header Content Table (Centered, Bold rules)
-    // M.I.E.T / VELAMMAL ENGINEERING COLLEGE (AUTONOMOUS)
-    // Tiruchirappalli-620007 (BOLD ALWAYS)
-    // Continuous Internal Assessment – {CIA Roman}
-    // {Academic Year} – {Odd/Even} Semester
-    // {Typed Semester} Semester
-    // {Programme}
-    // {Course Code} – {Course Title}
-    // Common To: {value} (if exists)
-    // ({Notes}) (if exists)
-
     const headerRows = [
-        new TableRow({
-            children: [new TableCell({
-                borders: noBorder,
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "VELAMMAL ENGINEERING COLLEGE, CHENNAI – 66", bold: true, size: 28 })] })]
-            })]
-        }),
-        new TableRow({
-            children: [new TableCell({
-                borders: noBorder,
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "(An Autonomous Institution, Affiliated to Anna University, Chennai)", bold: true, size: 20 })] })]
-            })]
-        }),
-        // Ensure "Tiruchirappalli-620007" is present if user requested, but standard template might differ. 
-        // User prompt checks: "M.I.E.T / VELAMMAL... Tiruchirappalli-620007 (BOLD ALWAYS)"
-        // Since I'm using Velammal template text, I will stick to that but keep the structure.
-        // I will add the specific address line if it was part of the request context, but to be safe I'll stick to the "Autonmous" line above which seems to be the address equivalent for this specific college template.
-
-        new TableRow({
-            children: [new TableCell({
-                borders: noBorder,
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `CONTINUOUS INTERNAL ASSESSMENT – ${toRoman(paper.ciaType)}`, bold: true, size: 24 })] })]
-            })]
-        }),
-        new TableRow({
-            children: [new TableCell({
-                borders: noBorder,
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${paper.academicYear} – ${getSemesterType(paper.semester)}`, bold: true, size: 20 })] })]
-            })]
-        }),
-        new TableRow({
-            children: [new TableCell({
-                borders: noBorder,
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${paper.semester} Semester`, bold: true, size: 20 })] })]
-            })]
-        }),
-        new TableRow({
-            children: [new TableCell({
-                borders: noBorder,
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: paper.programme, bold: true, size: 20 })] })]
-            })]
-        }),
-        new TableRow({
-            children: [new TableCell({
-                borders: noBorder,
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${paper.courseCode} – ${paper.courseTitle}`, bold: true, size: 20 })] })]
-            })]
-        }),
+        new TableRow({ children: [new TableCell({ borders: noBorder, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "M.I.E.T. ENGINEERING COLLEGE", bold: true, size: 28 })] })] })] }),
+        new TableRow({ children: [new TableCell({ borders: noBorder, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "(AUTONOMOUS)", bold: true, size: 22 })] })] })] }),
+        new TableRow({ children: [new TableCell({ borders: noBorder, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Tiruchirappalli-620007", bold: true, size: 20 })] })] })] }),
+        new TableRow({ children: [new TableCell({ borders: noBorder, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `Continuous Internal Assessment – ${toRoman(paper.ciaType)}`, bold: true, size: 24 })] })] })] }),
+        new TableRow({ children: [new TableCell({ borders: noBorder, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${paper.academicYear} – ${getSemesterType(paper.semester)}`, bold: true, size: 20 })] })] })] }),
+        new TableRow({ children: [new TableCell({ borders: noBorder, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: paper.programme, bold: true, size: 20 })] })] })] }),
+        new TableRow({ children: [new TableCell({ borders: noBorder, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${paper.semester}${paper.semester.toLowerCase().includes('semester') ? "" : " Semester"}`, bold: true, size: 20 })] })] })] }),
+        new TableRow({ children: [new TableCell({ borders: noBorder, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${paper.courseCode.toUpperCase()} – ${paper.courseTitle.toUpperCase()}`, bold: true, size: 24 })] })] })] }),
     ];
 
     if (paper.commonTo) {
-        headerRows.push(new TableRow({
-            children: [new TableCell({
-                borders: noBorder,
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `Common to: ${paper.commonTo}`, bold: true, size: 20 })] })]
-            })]
-        }));
+        headerRows.push(new TableRow({ children: [new TableCell({ borders: noBorder, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `Common to: ${paper.commonTo}`, bold: true, size: 20 })] })] })] }));
     }
 
     if (paper.permittingNotes) {
-        headerRows.push(new TableRow({
-            children: [new TableCell({
-                borders: noBorder,
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `(${paper.permittingNotes})`, bold: true, size: 20 })] })]
-            })]
-        }));
+        headerRows.push(new TableRow({ children: [new TableCell({ borders: noBorder, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `(${paper.permittingNotes})`, bold: true, size: 20 })] })] })] }));
     }
 
     const headerTable = new Table({
         width: { size: 100, type: WidthType.PERCENTAGE },
+        layout: "fixed",
         borders: noBorder,
         rows: headerRows
     });
@@ -521,13 +473,14 @@ const generateWord = async (paper, partA, partB, summary, correctGrandTotal, btl
     // Metadata Grid (2 Column)
     const metadataTable = new Table({
         width: { size: 100, type: WidthType.PERCENTAGE },
+        layout: "fixed",
         borders: noBorder,
+        columnWidths: [4500, 4500],
         rows: [
             new TableRow({
                 children: [
                     new TableCell({
                         borders: noBorder,
-                        width: { size: 50, type: WidthType.PERCENTAGE },
                         children: [
                             new Paragraph({ children: [new TextRun({ text: `Date : ${formatDate(paper.date)}`, bold: true, size: 22 })] }),
                             new Paragraph({ children: [new TextRun({ text: "Time : 2 Hrs.", bold: true, size: 22 })] })
@@ -535,7 +488,6 @@ const generateWord = async (paper, partA, partB, summary, correctGrandTotal, btl
                     }),
                     new TableCell({
                         borders: noBorder,
-                        width: { size: 50, type: WidthType.PERCENTAGE },
                         children: [
                             new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: `Session : ${paper.session}`, bold: true, size: 22 })] }),
                             new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: "Maximum Marks : 60", bold: true, size: 22 })] })
@@ -549,7 +501,7 @@ const generateWord = async (paper, partA, partB, summary, correctGrandTotal, btl
     // Part A Header
     const partAHeader = new Paragraph({
         alignment: AlignmentType.CENTER,
-        shading: { fill: "F3F4F6" }, // Light grey background like PDF
+        shading: { fill: "F3F4F6" },
         children: [new TextRun({ text: "PART-A (6 x 2 = 12 Marks)", bold: true, size: 24 })],
         spacing: { before: 200, after: 100 }
     });
@@ -560,26 +512,38 @@ const generateWord = async (paper, partA, partB, summary, correctGrandTotal, btl
     });
 
     const tableHeaderColor = "F8F8F8";
+    const borderSettings = {
+        top: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+        bottom: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+        left: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+        right: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+        insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+        insideVertical: { style: BorderStyle.SINGLE, size: 4, color: "000000" }
+    };
 
     // Part A Table
     const partATable = new Table({
         width: { size: 100, type: WidthType.PERCENTAGE },
+        layout: "fixed",
+        columnWidths: [720, 6480, 900, 900], // 8%, 72%, 10%, 10% approx
+        borders: borderSettings,
         rows: [
             new TableRow({
                 tableHeader: true,
                 children: [
-                    new TableCell({ shading: { fill: tableHeaderColor }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Q. No.", bold: true, size: 20 })] })], width: { size: 8, type: WidthType.PERCENTAGE } }),
-                    new TableCell({ shading: { fill: tableHeaderColor }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Questions", bold: true, size: 20 })] })], width: { size: 72, type: WidthType.PERCENTAGE } }),
-                    new TableCell({ shading: { fill: tableHeaderColor }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "CO", bold: true, size: 20 })] })], width: { size: 10, type: WidthType.PERCENTAGE } }),
-                    new TableCell({ shading: { fill: tableHeaderColor }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "BTL", bold: true, size: 20 })] })], width: { size: 10, type: WidthType.PERCENTAGE } }),
+                    new TableCell({ shading: { fill: tableHeaderColor }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Q. No.", bold: true, size: 20 })] })], verticalAlign: VerticalAlign.CENTER }),
+                    new TableCell({ shading: { fill: tableHeaderColor }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Questions", bold: true, size: 20 })] })], verticalAlign: VerticalAlign.CENTER }),
+                    new TableCell({ shading: { fill: tableHeaderColor }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "CO", bold: true, size: 20 })] })], verticalAlign: VerticalAlign.CENTER }),
+                    new TableCell({ shading: { fill: tableHeaderColor }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "BTL", bold: true, size: 20 })] })], verticalAlign: VerticalAlign.CENTER }),
                 ]
             }),
             ...partA.map(q => new TableRow({
+                cantSplit: true,
                 children: [
-                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: q.qNo, size: 22 })] })] }),
-                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.BOTH, children: formatMathWord(q.text) })] }), // Justified
-                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: q.co, size: 22 })] })] }),
-                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: q.btl, size: 22 })] })] }),
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: q.qNo, size: 22 })] })], verticalAlign: VerticalAlign.CENTER }),
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.BOTH, children: formatMathWord(q.text) })], verticalAlign: VerticalAlign.CENTER }),
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: q.co, size: 22 })] })], verticalAlign: VerticalAlign.CENTER }),
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: q.btl, size: 22 })] })], verticalAlign: VerticalAlign.CENTER }),
                 ]
             }))
         ]
@@ -601,61 +565,41 @@ const generateWord = async (paper, partA, partB, summary, correctGrandTotal, btl
     // Part B Table
     const partBTable = new Table({
         width: { size: 100, type: WidthType.PERCENTAGE },
+        layout: "fixed",
+        columnWidths: [720, 400, 6080, 900, 900], // 8%, 4.4%, 67.6%, 10%, 10%
+        borders: borderSettings,
         rows: [
             new TableRow({
                 tableHeader: true,
                 children: [
-                    new TableCell({ shading: { fill: tableHeaderColor }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Q. No.", bold: true, size: 20 })] })], width: { size: 8, type: WidthType.PERCENTAGE } }),
-                    new TableCell({ shading: { fill: tableHeaderColor }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Questions", bold: true, size: 20 })] })], width: { size: 72, type: WidthType.PERCENTAGE } }),
-                    new TableCell({ shading: { fill: tableHeaderColor }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "CO", bold: true, size: 20 })] })], width: { size: 10, type: WidthType.PERCENTAGE } }),
-                    new TableCell({ shading: { fill: tableHeaderColor }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "BTL", bold: true, size: 20 })] })], width: { size: 10, type: WidthType.PERCENTAGE } }),
+                    new TableCell({ shading: { fill: tableHeaderColor }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Q. No.", bold: true, size: 20 })] })], verticalAlign: VerticalAlign.CENTER }),
+                    new TableCell({ columnSpan: 2, shading: { fill: tableHeaderColor }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Questions", bold: true, size: 20 })] })], verticalAlign: VerticalAlign.CENTER }),
+                    new TableCell({ shading: { fill: tableHeaderColor }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "CO", bold: true, size: 20 })] })], verticalAlign: VerticalAlign.CENTER }),
+                    new TableCell({ shading: { fill: tableHeaderColor }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "BTL", bold: true, size: 20 })] })], verticalAlign: VerticalAlign.CENTER }),
                 ]
             }),
             ...partB.flatMap((group) => {
                 const renderContent = (sub) => {
                     const subs = group[sub].subdivisions || [];
-                    const indicator = sub === 'a' ? '(a)' : '(b)';
-
                     if (subs.length === 0) {
                         return [new Paragraph({
                             alignment: AlignmentType.BOTH,
-                            children: [new TextRun({ text: indicator + " " }), ...formatMathWord(group[sub].text)],
-                            spacing: { line: 276 } // Tight spacing ~1.15
+                            children: formatMathWord(group[sub].text),
                         })];
                     }
 
-                    // For subdivisions: (a) on its own line, then table for subs
                     return [
-                        new Paragraph({ children: [new TextRun({ text: indicator })], spacing: { after: 100 } }),
                         new Table({
                             width: { size: 100, type: WidthType.PERCENTAGE },
-                            borders: noBorder, // No borders for inner table
+                            layout: "fixed",
+                            borders: noBorder,
+                            columnWidths: [400, 5080, 600],
                             rows: subs.map(sd => new TableRow({
+                                cantSplit: true,
                                 children: [
-                                    new TableCell({
-                                        width: { size: 500, type: WidthType.DXA },
-                                        children: [new Paragraph({ children: [new TextRun({ text: sd.label })] })],
-                                        verticalAlign: VerticalAlign.TOP,
-                                        borders: noBorder
-                                    }),
-                                    new TableCell({
-                                        children: [new Paragraph({
-                                            alignment: AlignmentType.BOTH,
-                                            children: formatMathWord(sd.text),
-                                            spacing: { line: 276 }
-                                        })],
-                                        verticalAlign: VerticalAlign.TOP,
-                                        borders: noBorder
-                                    }),
-                                    new TableCell({
-                                        width: { size: 700, type: WidthType.DXA },
-                                        children: [new Paragraph({
-                                            alignment: AlignmentType.RIGHT,
-                                            children: [new TextRun({ text: sd.marks ? `(${sd.marks})` : "" })]
-                                        })],
-                                        verticalAlign: VerticalAlign.TOP,
-                                        borders: noBorder
-                                    })
+                                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: sd.label })] })], borders: noBorder, verticalAlign: VerticalAlign.TOP }),
+                                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.BOTH, children: formatMathWord(sd.text) })], borders: noBorder, verticalAlign: VerticalAlign.TOP }),
+                                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: sd.marks ? `(${sd.marks})` : "" })] })], borders: noBorder, verticalAlign: VerticalAlign.TOP })
                                 ]
                             }))
                         })
@@ -664,52 +608,75 @@ const generateWord = async (paper, partA, partB, summary, correctGrandTotal, btl
 
                 return [
                     new TableRow({
+                        cantSplit: false,
                         children: [
                             new TableCell({ rowSpan: 3, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: group.qNo.toString(), size: 22, bold: true })] })], verticalAlign: VerticalAlign.CENTER }),
-                            new TableCell({ children: renderContent('a') }),
+                            new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "(a)" })] })], verticalAlign: VerticalAlign.CENTER }),
+                            new TableCell({ children: renderContent('a'), verticalAlign: VerticalAlign.CENTER }),
                             new TableCell({ rowSpan: 3, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: group.a.co, size: 22 })] })], verticalAlign: VerticalAlign.CENTER }),
                             new TableCell({ rowSpan: 3, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: group.a.btl, size: 22 })] })], verticalAlign: VerticalAlign.CENTER }),
                         ]
                     }),
-                    new TableRow({ children: [new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Or", bold: true, size: 22 })] })], verticalAlign: VerticalAlign.CENTER })] }),
-                    new TableRow({
-                        children: [
-                            new TableCell({ children: renderContent('b') }),
-                        ]
-                    }),
+                    new TableRow({ cantSplit: true, children: [new TableCell({ columnSpan: 2, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Or", bold: true, size: 22 })] })], verticalAlign: VerticalAlign.CENTER })] }),
+                    new TableRow({ cantSplit: false, children: [new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "(b)" })] })], verticalAlign: VerticalAlign.CENTER }), new TableCell({ children: renderContent('b'), verticalAlign: VerticalAlign.CENTER })] }),
                 ];
             })
         ]
     });
 
     // Summary Table (CO/BTL Mapping)
-    const summaryHeader = new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "OUTCOME-COGNITIVE LEVEL MAPPING", bold: true, size: 22, underline: {} })], spacing: { before: 400, after: 200 } });
+    const summaryHeader = new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Weightage of CO", bold: true, size: 22, underline: {} })], spacing: { before: 400, after: 200 } });
     const summaryTable = new Table({
         width: { size: 100, type: WidthType.PERCENTAGE },
+        layout: "fixed",
+        columnWidths: [1800, 1000, 1000, 1000, 1000, 1000, 1000, 1200, 1000],
+        borders: borderSettings,
         rows: [
             new TableRow({
                 children: [
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Cognitive Level", bold: true })] })] }),
-                    ...cos.map(co => new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: co, bold: true })] })] })),
-                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Total", bold: true })] })] }),
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "BTL", bold: true, size: 20 })] })], verticalAlign: VerticalAlign.CENTER }),
+                    new TableCell({ children: [new Paragraph({ text: "" })], verticalAlign: VerticalAlign.CENTER }), // Empty cell above Q.No/Marks
+                    ...cos.map(co => new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: co, bold: true, size: 20 })] })], verticalAlign: VerticalAlign.CENTER })),
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Total Marks", bold: true, size: 20 })] })], verticalAlign: VerticalAlign.CENTER }),
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Total Marks (%)", bold: true, size: 20 })] })], verticalAlign: VerticalAlign.CENTER }),
                 ]
             }),
-            ...btlKeys.map((btlKey, i) => new TableRow({
-                children: [
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: btls[i] })] })] }),
-                    ...cos.map(co => {
-                        const qs = summary[`${btlKey}_${co}_Q`].join(', ');
-                        const ms = summary[`${btlKey}_${co}_M`];
-                        return new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: qs ? `${qs} (${ms})` : "" })] })] });
+            ...btlKeys.flatMap((btlKey, i) => {
+                let btlRowTotal = 0;
+                cos.forEach(co => btlRowTotal += (summary[`${btlKey}_${co}_M`] || 0));
+                const percentage = (btlRowTotal > 0 && correctGrandTotal > 0) ? ((btlRowTotal / correctGrandTotal) * 100).toFixed(2) : "";
+
+                return [
+                    new TableRow({
+                        children: [
+                            new TableCell({ rowSpan: 2, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: btls[i], bold: true, size: 20 })] })], verticalAlign: VerticalAlign.CENTER }),
+                            new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Q. No.", bold: true, size: 16 })] })], verticalAlign: VerticalAlign.CENTER }),
+                            ...cos.map(co => {
+                                const qs = summary[`${btlKey}_${co}_Q`].join(',');
+                                return new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: qs, size: 20 })] })], verticalAlign: VerticalAlign.CENTER });
+                            }),
+                            new TableCell({ children: [new Paragraph({ text: "" })], verticalAlign: VerticalAlign.CENTER }), // Empty top total cell
+                            new TableCell({ rowSpan: 2, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: percentage, bold: true, size: 20 })] })], verticalAlign: VerticalAlign.CENTER })
+                        ]
                     }),
-                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: btlKeys[i] === btlKey ? cos.reduce((sum, co) => sum + summary[`${btlKey}_${co}_M`], 0).toString() : "" })] })] })
-                ]
-            })),
+                    new TableRow({
+                        children: [
+                            new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Marks", bold: true, size: 16 })] })], verticalAlign: VerticalAlign.CENTER }),
+                            ...cos.map(co => {
+                                const ms = summary[`${btlKey}_${co}_M`];
+                                return new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: ms > 0 ? ms.toString() : "", size: 20 })] })], verticalAlign: VerticalAlign.CENTER });
+                            }),
+                            new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: btlRowTotal > 0 ? btlRowTotal.toString() : "", bold: true, size: 20 })] })], verticalAlign: VerticalAlign.CENTER })
+                        ]
+                    })
+                ];
+            }),
             new TableRow({
                 children: [
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Total", bold: true })] })] }),
-                    ...cos.map(co => new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: summary[`${co}_TOTAL`].toString(), bold: true })] })] })),
-                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: correctGrandTotal.toString(), bold: true })] })] }),
+                    new TableCell({ columnSpan: 2, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Total Marks", bold: true, size: 20 })] })], verticalAlign: VerticalAlign.CENTER }),
+                    ...cos.map(co => new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: summary[`${co}_TOTAL`] > 0 ? summary[`${co}_TOTAL`].toString() : "", bold: true, size: 20 })] })], verticalAlign: VerticalAlign.CENTER })),
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: correctGrandTotal > 0 ? correctGrandTotal.toString() : "", bold: true, size: 20 })] })], verticalAlign: VerticalAlign.CENTER }),
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "100.00", bold: true, size: 20 })] })], verticalAlign: VerticalAlign.CENTER }),
                 ]
             })
         ]
@@ -717,8 +684,27 @@ const generateWord = async (paper, partA, partB, summary, correctGrandTotal, btl
 
 
     const doc = new Document({
+        creator: "CIA Generator",
+        styles: {
+            default: {
+                document: {
+                    run: {
+                        font: "Times New Roman",
+                        size: 24, // 12pt
+                    },
+                    paragraph: {
+                        spacing: { before: 0, after: 0, line: 240, lineRule: "auto" }, // Single spacing, 0 before/after
+                    },
+                },
+            },
+        },
         sections: [{
-            properties: { page: { margin: { top: 720, bottom: 720, left: 720, right: 720 }, size: { width: 11906, height: 16838 } } }, // A4
+            properties: {
+                page: {
+                    margin: { top: 1440, bottom: 1440, left: 1440, right: 1440 }, // 1 inch = 1440 twips
+                    size: { width: 11906, height: 16838 } // A4
+                }
+            },
             children: [
                 headerTable,
                 new Paragraph({ spacing: { before: 100 } }),
@@ -881,7 +867,7 @@ app.get('/api/papers', async (req, res) => {
     res.json(papers);
 });
 
-app.listen(PORT, '172.27.53.175', () => {
-    console.log(`Server running on http://172.27.53.175:${PORT}`);
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
     console.log('Refined Header Logic Loaded: Bold Address, DD-MM-YYYY Date, Roman numerals');
 });
