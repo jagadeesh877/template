@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import axios from 'axios';
-import { Download, Plus, Trash2, FileText, CheckCircle } from 'lucide-react';
+import { Download, Plus, Trash2, FileText, X } from 'lucide-react';
 
 const CO_OPTIONS = ['CO1', 'CO2', 'CO3', 'CO4', 'CO5'];
 const BTL_OPTIONS = ['L1', 'L2', 'L3', 'L4'];
@@ -9,10 +9,12 @@ interface Subdivision {
     label: string;
     text: string;
     marks: string;
+    images: string[];
 }
 
 interface PartBQuestion {
     text: string;
+    images: string[];
     subdivisions: Subdivision[];
     co: string;
     btl: string;
@@ -22,6 +24,52 @@ interface PartBGroup {
     qNo: string;
     a: PartBQuestion;
     b: PartBQuestion;
+}
+
+// ── Paste helper: reads image from clipboard, calls onImage with base64 data URL ──
+const readImageFromClipboard = (e: React.ClipboardEvent, onImage: (src: string) => void) => {
+    const items = e.clipboardData?.items;
+    if (!items) return false;
+    for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+            e.preventDefault();
+            const file = item.getAsFile();
+            if (!file) continue;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                if (ev.target?.result) onImage(ev.target.result as string);
+            };
+            reader.readAsDataURL(file);
+            return true; // consumed as image
+        }
+    }
+    return false; // normal text paste
+};
+
+// ── Reusable image thumbnail strip ──
+const ImageStrip = ({ images, onRemove }: { images: string[]; onRemove: (i: number) => void }) => {
+    if (!images || images.length === 0) return null;
+    return (
+        <div className="flex flex-wrap gap-2 mt-2">
+            {images.map((src, i) => (
+                <div key={i} className="relative group inline-block">
+                    <img src={src} alt="" className="max-h-32 max-w-full rounded border border-gray-200 object-contain block mx-auto" style={{ display: 'block' }} />
+                    <button
+                        type="button"
+                        onClick={() => onRemove(i)}
+                        className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition"
+                        title="Remove image"
+                    >
+                        <X className="w-3 h-3" />
+                    </button>
+                </div>
+            ))}
+        </div>
+    );
+};
+
+function makePartBQuestion(): PartBQuestion {
+    return { text: '', images: [], subdivisions: [], co: 'CO1', btl: 'L1' };
 }
 
 function App() {
@@ -42,6 +90,7 @@ function App() {
         Array(6).fill(0).map((_, i) => ({
             qNo: `${i + 1}`,
             text: '',
+            images: [] as string[],
             co: 'CO1',
             btl: 'L1',
         }))
@@ -50,18 +99,8 @@ function App() {
     const [partB, setPartB] = useState<PartBGroup[]>(
         [7, 8, 9].map(qNo => ({
             qNo: `${qNo}`,
-            a: {
-                text: '',
-                subdivisions: [],
-                co: 'CO1',
-                btl: 'L1'
-            },
-            b: {
-                text: '',
-                subdivisions: [],
-                co: 'CO1',
-                btl: 'L1'
-            },
+            a: makePartBQuestion(),
+            b: makePartBQuestion(),
         }))
     );
 
@@ -80,6 +119,7 @@ function App() {
         setHeader({ ...header, [e.target.name]: sanitizedValue });
     };
 
+    // ── Part A handlers ──
     const handlePartAChange = (index: number, field: string, value: string) => {
         const sanitizedValue = field === 'text' ? value.replace(/[\r\n]+/g, ' ') : value;
         const newPartA = [...partA];
@@ -87,6 +127,21 @@ function App() {
         setPartA(newPartA);
     };
 
+    const addPartAImage = (index: number, src: string) => {
+        const newPartA = [...partA];
+        newPartA[index] = { ...newPartA[index], images: [...newPartA[index].images, src] };
+        setPartA(newPartA);
+    };
+
+    const removePartAImage = (index: number, imgIdx: number) => {
+        const newPartA = [...partA];
+        const imgs = [...newPartA[index].images];
+        imgs.splice(imgIdx, 1);
+        newPartA[index] = { ...newPartA[index], images: imgs };
+        setPartA(newPartA);
+    };
+
+    // ── Part B handlers ──
     const handlePartBSubChange = (qIndex: number, sub: 'a' | 'b', field: string, value: string) => {
         const sanitizedValue = field === 'text' ? value.replace(/[\r\n]+/g, ' ') : value;
         const newPartB = [...partB];
@@ -94,14 +149,27 @@ function App() {
         setPartB(newPartB);
     };
 
+    const addPartBImage = (qIndex: number, sub: 'a' | 'b', src: string) => {
+        const newPartB = [...partB];
+        newPartB[qIndex][sub] = { ...newPartB[qIndex][sub], images: [...(newPartB[qIndex][sub].images || []), src] };
+        setPartB(newPartB);
+    };
+
+    const removePartBImage = (qIndex: number, sub: 'a' | 'b', imgIdx: number) => {
+        const newPartB = [...partB];
+        const imgs = [...(newPartB[qIndex][sub].images || [])];
+        imgs.splice(imgIdx, 1);
+        newPartB[qIndex][sub] = { ...newPartB[qIndex][sub], images: imgs };
+        setPartB(newPartB);
+    };
+
     const handleAddSubdivision = (qIndex: number, sub: 'a' | 'b') => {
         const newPartB = [...partB];
-        // If switching from normal to subdivision for the first time
         if (newPartB[qIndex][sub].subdivisions.length === 0) {
-            newPartB[qIndex][sub].subdivisions.push({ label: 'i)', text: newPartB[qIndex][sub].text, marks: '8' });
-            newPartB[qIndex][sub].text = ''; // Clear main text as it's now in first subdivision
+            newPartB[qIndex][sub].subdivisions.push({ label: 'i)', text: newPartB[qIndex][sub].text, marks: '8', images: [] });
+            newPartB[qIndex][sub].text = '';
         } else {
-            newPartB[qIndex][sub].subdivisions.push({ label: '', text: '', marks: '8' });
+            newPartB[qIndex][sub].subdivisions.push({ label: '', text: '', marks: '8', images: [] });
         }
         setPartB(newPartB);
     };
@@ -109,9 +177,7 @@ function App() {
     const handleRemoveSubdivision = (qIndex: number, sub: 'a' | 'b', subIndex: number) => {
         const newPartB = [...partB];
         const subList = newPartB[qIndex][sub].subdivisions;
-
         if (subList.length === 1) {
-            // Reverting to normal mode
             newPartB[qIndex][sub].text = subList[0].text;
             newPartB[qIndex][sub].subdivisions = [];
         } else {
@@ -130,20 +196,36 @@ function App() {
         setPartB(newPartB);
     };
 
+    const addSubdivisionImage = (qIndex: number, sub: 'a' | 'b', subIndex: number, src: string) => {
+        const newPartB = [...partB];
+        const sd = newPartB[qIndex][sub].subdivisions[subIndex];
+        newPartB[qIndex][sub].subdivisions[subIndex] = { ...sd, images: [...(sd.images || []), src] };
+        setPartB(newPartB);
+    };
+
+    const removeSubdivisionImage = (qIndex: number, sub: 'a' | 'b', subIndex: number, imgIdx: number) => {
+        const newPartB = [...partB];
+        const sd = newPartB[qIndex][sub].subdivisions[subIndex];
+        const imgs = [...(sd.images || [])];
+        imgs.splice(imgIdx, 1);
+        newPartB[qIndex][sub].subdivisions[subIndex] = { ...sd, images: imgs };
+        setPartB(newPartB);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setPdfUrl('');
         setWordUrl('');
         try {
-            const response = await axios.post('http://localhost:5000/api/papers', {
+            const response = await axios.post('http://172.27.52.184:5000/api/papers', {
                 header,
                 partA,
                 partB,
                 fileName: generateFileName()
             });
-            setPdfUrl(`http://localhost:5000${response.data.pdfUrl}?t=${Date.now()}`);
-            setWordUrl(`http://localhost:5000${response.data.wordUrl}?t=${Date.now()}`);
+            setPdfUrl(`http://172.27.52.184:5000${response.data.pdfUrl}?t=${Date.now()}`);
+            setWordUrl(`http://172.27.52.184:5000${response.data.wordUrl}?t=${Date.now()}`);
         } catch (error: any) {
             console.error('Error generating paper:', error);
             const msg = error.response?.data?.error || error.message || 'Failed to generate paper';
@@ -163,20 +245,12 @@ function App() {
                         </h1>
                         <div className="flex space-x-3">
                             {pdfUrl && (
-                                <a
-                                    href={pdfUrl}
-                                    download={`${generateFileName()}.pdf`}
-                                    className="flex items-center bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md font-medium transition text-sm"
-                                >
+                                <a href={pdfUrl} download={`${generateFileName()}.pdf`} className="flex items-center bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md font-medium transition text-sm">
                                     <Download className="mr-2 h-4 w-4" /> PDF
                                 </a>
                             )}
                             {wordUrl && (
-                                <a
-                                    href={wordUrl}
-                                    download={`${generateFileName()}.docx`}
-                                    className="flex items-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md font-medium transition text-sm"
-                                >
+                                <a href={wordUrl} download={`${generateFileName()}.docx`} className="flex items-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md font-medium transition text-sm">
                                     <Download className="mr-2 h-4 w-4" /> Word
                                 </a>
                             )}
@@ -184,6 +258,7 @@ function App() {
                     </div>
 
                     <form onSubmit={handleSubmit} className="p-8 space-y-8">
+                        {/* Header */}
                         <section className="space-y-4">
                             <h2 className="text-lg font-semibold text-gray-800 border-b pb-2">Header Information</h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -237,15 +312,26 @@ function App() {
                             </div>
                         </section>
 
+                        {/* Part A */}
                         <section className="space-y-4">
                             <h2 className="text-lg font-semibold text-gray-800 border-b pb-2">PART A (6 × 2 Marks)</h2>
                             <div className="space-y-4">
                                 {partA.map((q, i) => (
-                                    <div key={i} className="grid grid-cols-12 gap-3 items-end bg-gray-50 p-3 rounded-md border border-gray-200">
-                                        <div className="col-span-1 text-center font-bold text-gray-500 pb-2">Q{i + 1}</div>
+                                    <div key={i} className="grid grid-cols-12 gap-3 items-start bg-gray-50 p-3 rounded-md border border-gray-200">
+                                        <div className="col-span-1 text-center font-bold text-gray-500 pt-6">Q{i + 1}</div>
                                         <div className="col-span-11 md:col-span-7">
-                                            <label className="block text-xs text-gray-500 mb-1">Question Text</label>
-                                            <textarea value={q.text} onChange={(e) => handlePartAChange(i, 'text', e.target.value)} rows={2} className="block w-full border-gray-300 rounded-md shadow-sm sm:text-sm border p-2" required />
+                                            <label className="block text-xs text-gray-500 mb-1">
+                                                Question Text <span className="text-blue-400 font-normal">(Ctrl+V to paste image)</span>
+                                            </label>
+                                            <textarea
+                                                value={q.text}
+                                                onChange={(e) => handlePartAChange(i, 'text', e.target.value)}
+                                                onPaste={(e) => readImageFromClipboard(e, (src) => addPartAImage(i, src))}
+                                                rows={2}
+                                                className="block w-full border-gray-300 rounded-md shadow-sm sm:text-sm border p-2"
+                                                required={q.images.length === 0}
+                                            />
+                                            <ImageStrip images={q.images} onRemove={(imgIdx) => removePartAImage(i, imgIdx)} />
                                         </div>
                                         <div className="col-span-6 md:col-span-2">
                                             <label className="block text-xs text-gray-500 mb-1">CO</label>
@@ -264,6 +350,7 @@ function App() {
                             </div>
                         </section>
 
+                        {/* Part B */}
                         <section className="space-y-4">
                             <h2 className="text-lg font-semibold text-gray-800 border-b pb-2">PART B (3 × 16 Marks – Either/Or)</h2>
                             <div className="space-y-6">
@@ -301,15 +388,19 @@ function App() {
                                                 <div className="space-y-2 pl-6">
                                                     {group[sub].subdivisions.length === 0 ? (
                                                         <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm">
-                                                            <label className="block text-[10px] text-gray-400 mb-1 uppercase font-bold">Question Content (Normal Mode)</label>
+                                                            <label className="block text-[10px] text-gray-400 mb-1 uppercase font-bold">
+                                                                Question Content <span className="text-blue-400 normal-case font-normal">(Ctrl+V to paste image)</span>
+                                                            </label>
                                                             <textarea
                                                                 value={group[sub].text}
                                                                 onChange={(e) => handlePartBSubChange(i, sub, 'text', e.target.value)}
+                                                                onPaste={(e) => readImageFromClipboard(e, (src) => addPartBImage(i, sub, src))}
                                                                 rows={3}
                                                                 placeholder="Enter full question text here..."
                                                                 className="w-full border-gray-200 rounded text-sm border p-2 focus:ring-blue-500"
-                                                                required
+                                                                required={group[sub].images.length === 0}
                                                             />
+                                                            <ImageStrip images={group[sub].images || []} onRemove={(imgIdx) => removePartBImage(i, sub, imgIdx)} />
                                                         </div>
                                                     ) : (
                                                         group[sub].subdivisions.map((sd: any, sdIdx: number) => (
@@ -319,8 +410,17 @@ function App() {
                                                                     <input type="text" placeholder="i)" value={sd.label} onChange={(e) => handleSubdivisionChange(i, sub, sdIdx, 'label', e.target.value)} className="w-full border-gray-200 rounded text-sm border p-1.5 focus:ring-blue-500" />
                                                                 </div>
                                                                 <div className="col-span-8">
-                                                                    <label className="block text-[10px] text-gray-400 mb-1">Content</label>
-                                                                    <textarea value={sd.text} onChange={(e) => handleSubdivisionChange(i, sub, sdIdx, 'text', e.target.value)} rows={2} className="w-full border-gray-200 rounded text-sm border p-1.5 focus:ring-blue-500" required />
+                                                                    <label className="block text-[10px] text-gray-400 mb-1">
+                                                                        Content <span className="text-blue-400 font-normal">(Ctrl+V for image)</span>
+                                                                    </label>
+                                                                    <textarea
+                                                                        value={sd.text}
+                                                                        onChange={(e) => handleSubdivisionChange(i, sub, sdIdx, 'text', e.target.value)}
+                                                                        onPaste={(e) => readImageFromClipboard(e, (src) => addSubdivisionImage(i, sub, sdIdx, src))}
+                                                                        rows={2}
+                                                                        className="w-full border-gray-200 rounded text-sm border p-1.5 focus:ring-blue-500"
+                                                                    />
+                                                                    <ImageStrip images={sd.images || []} onRemove={(imgIdx) => removeSubdivisionImage(i, sub, sdIdx, imgIdx)} />
                                                                 </div>
                                                                 <div className="col-span-2">
                                                                     <label className="block text-[10px] text-gray-400 mb-1">Marks</label>
@@ -329,7 +429,7 @@ function App() {
                                                                     </select>
                                                                 </div>
                                                                 <div className="col-span-1 pt-6 text-right">
-                                                                    <button type="button" onClick={() => handleRemoveSubdivision(i, sub, sdIdx)} className="text-red-400 hover:text-red-600 transition p-1" title="Remove part and revert if last">
+                                                                    <button type="button" onClick={() => handleRemoveSubdivision(i, sub, sdIdx)} className="text-red-400 hover:text-red-600 transition p-1" title="Remove part">
                                                                         <Trash2 className="w-4 h-4" />
                                                                     </button>
                                                                 </div>

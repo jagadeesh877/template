@@ -5,17 +5,80 @@ const { PrismaClient } = require('@prisma/client');
 const path = require('path');
 const fs = require('fs');
 const puppeteer = require('puppeteer');
-const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, WidthType, BorderStyle, VerticalAlign, HeightRule, TableBorders, TabStopType } = require('docx');
+const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, WidthType, BorderStyle, VerticalAlign, HeightRule, TableBorders, TabStopType, ImageRun } = require('docx');
+const sizeOf = require('image-size');
 
 const prisma = new PrismaClient();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 app.use('/generated', express.static(path.join(__dirname, 'generated')));
 
 const generatedDir = path.join(__dirname, 'generated');
+
+// ── Image helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * Returns centered <img> HTML tags for embedding in the PDF.
+ * @param {string[]} images – array of base64 data URLs
+ */
+const renderImagesHTML = (images) => {
+    if (!images || images.length === 0) return '';
+    return images.map(src =>
+        `<div style="text-align:center;margin:4px 0;"><img src="${src}" style="max-width:50%;max-height:180px;width:auto;height:auto;display:block;margin:0 auto;"></div>`
+    ).join('');
+};
+
+/**
+ * Returns an array of centered docx Paragraphs containing ImageRun objects.
+ * @param {string[]} images – array of base64 data URLs
+ * @param {number} maxWidthEmu – max width in EMU (English Metric Units). 1 pt = 12700 EMU.
+ */
+const renderImagesWord = (images, maxWidthEmu = 1828800) => {  // ~2 inches max width
+    if (!images || images.length === 0) return [];
+    const paragraphs = [];
+    for (const src of images) {
+        try {
+            // Strip data URL header and get Buffer
+            const base64 = src.replace(/^data:image\/[a-z]+;base64,/, '');
+            const buf = Buffer.from(base64, 'base64');
+
+            // Detect dimensions, scale to fit maxWidthEmu maintaining aspect ratio
+            let widthEmu = maxWidthEmu;
+            let heightEmu = Math.round(maxWidthEmu * 0.75); // fallback 4:3
+            try {
+                const dims = sizeOf(buf);
+                if (dims && dims.width && dims.height) {
+                    const scale = maxWidthEmu / (dims.width * 9144); // px → EMU (96dpi: 1px = 9144 EMU)
+                    widthEmu = Math.round(dims.width * 9144 * Math.min(scale, 1));
+                    heightEmu = Math.round(dims.height * 9144 * Math.min(scale, 1));
+                }
+            } catch (_) { /* use defaults */ }
+
+            // Determine image type from data URL
+            const mimeMatch = src.match(/^data:image\/([a-z]+);/);
+            const imgType = (mimeMatch && mimeMatch[1]) || 'png';
+
+            paragraphs.push(new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 80, after: 80 },
+                children: [
+                    new ImageRun({
+                        data: buf,
+                        transformation: { width: Math.round(widthEmu / 9144), height: Math.round(heightEmu / 9144) },
+                        type: imgType === 'jpeg' ? 'jpg' : imgType,
+                    })
+                ]
+            }));
+        } catch (e) {
+            console.error('Image render error:', e.message);
+        }
+    }
+    return paragraphs;
+};
 const normalizeText = (text) => {
     if (!text) return "";
     // 1. Collapse all surrounding/internal whitespace including newlines into single spaces
@@ -243,7 +306,7 @@ const generateHTML = (paper, partA, partB, summary, correctGrandTotal, btlKeys, 
                 ${partA.map((q, i) => `
                     <tr>
                         <td class="center">${i + 1}</td>
-                        <td class="question-text">${formatQuestionText(q.text)}</td>
+                        <td class="question-text">${formatQuestionText(q.text)}${renderImagesHTML(q.images)}</td>
                         <td class="center">${q.co}</td>
                         <td class="center">${q.btl}</td>
                     </tr>
@@ -283,13 +346,13 @@ const generateHTML = (paper, partA, partB, summary, correctGrandTotal, btlKeys, 
                             <td style="text-align: center; vertical-align: middle;">(a)</td>
                             <td class="question-text">
                                 ${group.a.subdivisions.length === 0 ?
-                `<div style="display: inline-block; width: 100%; text-align: justify; word-break: normal; overflow-wrap: break-word; line-height: 1.3; hyphens: none; vertical-align: top;">${formatQuestionText(group.a.text)}</div>` :
+                `<div style="display: inline-block; width: 100%; text-align: justify; word-break: normal; overflow-wrap: break-word; line-height: 1.3; hyphens: none; vertical-align: top;">${formatQuestionText(group.a.text)}${renderImagesHTML(group.a.images)}</div>` :
                 `<div style="display: inline-block; width: 100%; vertical-align: top;">
                                     ${group.a.subdivisions.map(sd => `
                                         <table style="width: 100%; border: none !important; border-collapse: collapse; margin-bottom: 0; table-layout: fixed; line-height: 1.3;">
                                             <tr>
                                                 <td style="width: 25px; border: none !important; padding: 0 !important; vertical-align: top; text-align: left; font-weight: normal;">${sd.label}</td>
-                                                <td style="border: none !important; padding: 0 !important; text-align: justify; vertical-align: top; word-break: normal; overflow-wrap: break-word; hyphens: none;">${formatQuestionText(sd.text)}</td>
+                                                <td style="border: none !important; padding: 0 !important; text-align: justify; vertical-align: top; word-break: normal; overflow-wrap: break-word; hyphens: none;">${formatQuestionText(sd.text)}${renderImagesHTML(sd.images)}</td>
                                                 <td style="width: 35px; border: none !important; padding: 0 !important; vertical-align: top; text-align: right; font-weight: normal;">${sd.marks ? `(${sd.marks})` : ""}</td>
                                             </tr>
                                         </table>
@@ -307,13 +370,13 @@ const generateHTML = (paper, partA, partB, summary, correctGrandTotal, btlKeys, 
                             <td style="text-align: center; vertical-align: middle;">(b)</td>
                             <td class="question-text">
                                 ${group.b.subdivisions.length === 0 ?
-                `<div style="display: inline-block; width: 100%; text-align: justify; word-break: normal; overflow-wrap: break-word; line-height: 1.3; hyphens: none; vertical-align: top;">${formatQuestionText(group.b.text)}</div>` :
+                `<div style="display: inline-block; width: 100%; text-align: justify; word-break: normal; overflow-wrap: break-word; line-height: 1.3; hyphens: none; vertical-align: top;">${formatQuestionText(group.b.text)}${renderImagesHTML(group.b.images)}</div>` :
                 `<div style="display: inline-block; width: calc(100% - 30px); vertical-align: top;">
                                     ${group.b.subdivisions.map(sd => `
                                         <table style="width: 100%; border: none !important; border-collapse: collapse; margin-bottom: 0; table-layout: fixed; line-height: 1.3;">
                                             <tr>
                                                 <td style="width: 25px; border: none !important; padding: 0 !important; vertical-align: top; text-align: left; font-weight: normal;">${sd.label}</td>
-                                                <td style="border: none !important; padding: 0 !important; text-align: justify; vertical-align: top; word-break: normal; overflow-wrap: break-word; hyphens: none;">${formatQuestionText(sd.text)}</td>
+                                                <td style="border: none !important; padding: 0 !important; text-align: justify; vertical-align: top; word-break: normal; overflow-wrap: break-word; hyphens: none;">${formatQuestionText(sd.text)}${renderImagesHTML(sd.images)}</td>
                                                 <td style="width: 35px; border: none !important; padding: 0 !important; vertical-align: top; text-align: right; font-weight: normal;">${sd.marks ? `(${sd.marks})` : ""}</td>
                                             </tr>
                                         </table>
@@ -566,7 +629,7 @@ const generateWord = async (paper, partA, partB, summary, correctGrandTotal, btl
                 cantSplit: true,
                 children: [
                     new TableCell({ margins: cellPad, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: q.qNo, size: 22 })] })], verticalAlign: VerticalAlign.CENTER }),
-                    new TableCell({ margins: cellPad, children: [new Paragraph({ alignment: AlignmentType.BOTH, children: formatMathWord(q.text) })], verticalAlign: VerticalAlign.CENTER }),
+                    new TableCell({ margins: cellPad, children: [new Paragraph({ alignment: AlignmentType.BOTH, children: formatMathWord(q.text) }), ...renderImagesWord(q.images)], verticalAlign: VerticalAlign.CENTER }),
                     new TableCell({ margins: cellPad, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: q.co, size: 22 })] })], verticalAlign: VerticalAlign.CENTER }),
                     new TableCell({ margins: cellPad, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: q.btl, size: 22 })] })], verticalAlign: VerticalAlign.CENTER }),
                 ]
@@ -606,12 +669,16 @@ const generateWord = async (paper, partA, partB, summary, correctGrandTotal, btl
             ...partB.flatMap((group) => {
                 const renderContent = (sub) => {
                     const subs = group[sub].subdivisions || [];
+                    const imgs = group[sub].images || [];
                     if (subs.length === 0) {
-                        return [new Paragraph({
-                            alignment: AlignmentType.BOTH,
-                            spacing: { before: 0, after: 0 },
-                            children: formatMathWord(group[sub].text),
-                        })];
+                        return [
+                            new Paragraph({
+                                alignment: AlignmentType.BOTH,
+                                spacing: { before: 0, after: 0 },
+                                children: formatMathWord(group[sub].text),
+                            }),
+                            ...renderImagesWord(imgs)
+                        ];
                     }
 
                     // Nested 3-column table: label | content | marks
@@ -638,11 +705,14 @@ const generateWord = async (paper, partA, partB, summary, correctGrandTotal, btl
                                     new TableCell({
                                         borders: noBorder,
                                         verticalAlign: VerticalAlign.TOP,
-                                        children: [new Paragraph({
-                                            alignment: AlignmentType.BOTH,
-                                            spacing: { before: 0, after: 0 },
-                                            children: formatMathWord(sd.text)
-                                        })]
+                                        children: [
+                                            new Paragraph({
+                                                alignment: AlignmentType.BOTH,
+                                                spacing: { before: 0, after: 0 },
+                                                children: formatMathWord(sd.text)
+                                            }),
+                                            ...renderImagesWord(sd.images)
+                                        ]
                                     }),
                                     new TableCell({
                                         borders: noBorder,
@@ -805,7 +875,10 @@ app.post('/api/papers', async (req, res) => {
                 session: header.session,
                 questions: {
                     create: [
-                        ...partA.map(q => ({ ...q, part: 'A', marks: 2 })),
+                        ...partA.map(q => {
+                            const { images: _imgs, ...dbQ } = q; // strip images — not in DB schema
+                            return { ...dbQ, part: 'A', marks: 2 };
+                        }),
                         ...partB.flatMap(q => [
                             {
                                 qNo: q.qNo + 'a',
@@ -931,7 +1004,7 @@ app.get('/api/papers', async (req, res) => {
     res.json(papers);
 });
 
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on http://172.27.52.184:${PORT}`);
     console.log('Refined Header Logic Loaded: Bold Address, DD-MM-YYYY Date, Roman numerals');
 });
