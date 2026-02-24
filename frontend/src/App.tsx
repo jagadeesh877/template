@@ -1,9 +1,10 @@
 import React, { useState, useCallback } from 'react';
 import axios from 'axios';
-import { Download, Plus, Trash2, FileText, X } from 'lucide-react';
+import { Download, Plus, Trash2, FileText, X, Loader2, CheckCircle } from 'lucide-react';
 
 const CO_OPTIONS = ['CO1', 'CO2', 'CO3', 'CO4', 'CO5'];
-const BTL_OPTIONS = ['L1', 'L2', 'L3', 'L4'];
+const BTL_OPTIONS_PART_A = ['L1', 'L2'];
+const BTL_OPTIONS_PART_B = ['L2', 'L3', 'L4'];
 
 interface Subdivision {
     label: string;
@@ -69,7 +70,7 @@ const ImageStrip = ({ images, onRemove }: { images: string[]; onRemove: (i: numb
 };
 
 function makePartBQuestion(): PartBQuestion {
-    return { text: '', images: [], subdivisions: [], co: 'CO1', btl: 'L1' };
+    return { text: '', images: [], subdivisions: [], co: 'CO1', btl: 'L2' };
 }
 
 function App() {
@@ -218,14 +219,15 @@ function App() {
         setPdfUrl('');
         setWordUrl('');
         try {
-            const response = await axios.post('http://172.27.52.184:5000/api/papers', {
+            const backendUrl = `http://${window.location.hostname}:5000`;
+            const response = await axios.post(`${backendUrl}/api/papers`, {
                 header,
                 partA,
                 partB,
                 fileName: generateFileName()
             });
-            setPdfUrl(`http://172.27.52.184:5000${response.data.pdfUrl}?t=${Date.now()}`);
-            setWordUrl(`http://172.27.52.184:5000${response.data.wordUrl}?t=${Date.now()}`);
+            setPdfUrl(`${backendUrl}${response.data.pdfUrl}?t=${Date.now()}`);
+            setWordUrl(`${backendUrl}${response.data.wordUrl}?t=${Date.now()}`);
         } catch (error: any) {
             console.error('Error generating paper:', error);
             const msg = error.response?.data?.error || error.message || 'Failed to generate paper';
@@ -235,26 +237,32 @@ function App() {
         }
     };
 
+    const handleDownloadFile = async (url: string, filename: string) => {
+        try {
+            const response = await axios.get(url, { responseType: 'blob' });
+            const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode?.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            console.error('Error downloading file:', error);
+            alert('Failed to download file.');
+        }
+    };
+
     return (
-        <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-blue-50 py-10 px-4 sm:px-6 lg:px-8 font-sans">
             <div className="max-w-4xl mx-auto">
-                <div className="bg-white shadow-xl rounded-lg overflow-hidden">
-                    <div className="bg-blue-600 py-6 px-8 flex justify-between items-center">
-                        <h1 className="text-2xl font-bold text-white flex items-center">
-                            <FileText className="mr-2" /> CIA Question Paper Generator
+                <div className="bg-white shadow-2xl rounded-2xl overflow-hidden border border-indigo-50">
+                    <div className="bg-gradient-to-r from-blue-600 to-indigo-600 py-8 px-8 flex flex-col sm:flex-row justify-between items-center relative overflow-hidden">
+                        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white opacity-10 rounded-full blur-2xl pointer-events-none"></div>
+                        <h1 className="text-3xl font-extrabold text-white flex items-center relative z-10 tracking-tight">
+                            <FileText className="mr-3 w-8 h-8" /> CIA Question Paper Generator
                         </h1>
-                        <div className="flex space-x-3">
-                            {pdfUrl && (
-                                <a href={pdfUrl} download={`${generateFileName()}.pdf`} className="flex items-center bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md font-medium transition text-sm">
-                                    <Download className="mr-2 h-4 w-4" /> PDF
-                                </a>
-                            )}
-                            {wordUrl && (
-                                <a href={wordUrl} download={`${generateFileName()}.docx`} className="flex items-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md font-medium transition text-sm">
-                                    <Download className="mr-2 h-4 w-4" /> Word
-                                </a>
-                            )}
-                        </div>
                     </div>
 
                     <form onSubmit={handleSubmit} className="p-8 space-y-8">
@@ -342,7 +350,7 @@ function App() {
                                         <div className="col-span-6 md:col-span-2">
                                             <label className="block text-xs text-gray-500 mb-1">BTL</label>
                                             <select value={q.btl} onChange={(e) => handlePartAChange(i, 'btl', e.target.value)} className="block w-full border-gray-300 rounded-md shadow-sm sm:text-sm border p-2">
-                                                {BTL_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                {BTL_OPTIONS_PART_A.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                                             </select>
                                         </div>
                                     </div>
@@ -375,7 +383,7 @@ function App() {
                                                             <div className="w-20">
                                                                 <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">BTL</label>
                                                                 <select value={group[sub].btl} onChange={(e) => handlePartBSubChange(i, sub, 'btl', e.target.value)} className="block w-full border-gray-200 rounded-md text-xs border p-1.5 focus:ring-blue-500">
-                                                                    {BTL_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                                    {BTL_OPTIONS_PART_B.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                                                                 </select>
                                                             </div>
                                                         </div>
@@ -445,15 +453,43 @@ function App() {
                             </div>
                         </section>
 
-                        <div className="pt-6">
+                        <div className="pt-8">
                             <button
                                 type="submit"
                                 disabled={loading}
-                                className={`w-full py-4 px-6 rounded-lg text-white font-bold text-lg shadow-lg transition transform active:scale-95 ${loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+                                className={`w-full py-4 px-6 rounded-xl text-white font-bold text-lg shadow-xl transition-all duration-300 flex justify-center items-center gap-2 ${loading ? 'bg-indigo-400 cursor-wait' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 hover:-translate-y-1 hover:shadow-indigo-500/30'}`}
                             >
-                                {loading ? 'Generating Paper...' : 'Generate CIA Question Paper'}
+                                {loading ? (
+                                    <><Loader2 className="w-6 h-6 animate-spin" /> Generating Paper...</>
+                                ) : (
+                                    <><FileText className="w-6 h-6" /> Generate CIA Question Paper</>
+                                )}
                             </button>
                         </div>
+
+                        {/* Animated Pop-Out Download Section */}
+                        {(pdfUrl || wordUrl) && !loading && (
+                            <div className="mt-8 animate-pop-in bg-gradient-to-br from-indigo-50 to-blue-50 rounded-2xl p-8 border border-indigo-100 shadow-inner flex flex-col items-center justify-center relative overflow-hidden">
+                                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-indigo-500"></div>
+                                <div className="bg-indigo-100 text-indigo-600 p-3 rounded-full mb-4 shadow-sm">
+                                    <CheckCircle className="w-8 h-8" />
+                                </div>
+                                <h3 className="text-indigo-900 font-extrabold text-2xl mb-2">Success!</h3>
+                                <p className="text-indigo-700/80 font-medium mb-6">Your CIA Question Paper is ready.</p>
+                                <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                                    {pdfUrl && (
+                                        <button type="button" onClick={() => handleDownloadFile(pdfUrl, `${generateFileName()}.pdf`)} className="flex items-center justify-center bg-white text-rose-600 border border-rose-200 hover:border-rose-400 hover:bg-rose-50 px-8 py-4 rounded-xl font-bold transition-all shadow-md hover:shadow-lg w-full sm:w-auto group">
+                                            <Download className="mr-2 h-5 w-5 group-hover:-translate-y-1 transition-transform" /> Download PDF
+                                        </button>
+                                    )}
+                                    {wordUrl && (
+                                        <button type="button" onClick={() => handleDownloadFile(wordUrl, `${generateFileName()}.docx`)} className="flex items-center justify-center bg-white text-blue-600 border border-blue-200 hover:border-blue-400 hover:bg-blue-50 px-8 py-4 rounded-xl font-bold transition-all shadow-md hover:shadow-lg w-full sm:w-auto group">
+                                            <Download className="mr-2 h-5 w-5 group-hover:-translate-y-1 transition-transform" /> Download Word
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </form>
                 </div>
             </div>

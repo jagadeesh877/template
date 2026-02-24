@@ -19,6 +19,22 @@ app.use('/generated', express.static(path.join(__dirname, 'generated')));
 
 const generatedDir = path.join(__dirname, 'generated');
 
+// Clean up existing generated files on server startup
+if (!fs.existsSync(generatedDir)) {
+    fs.mkdirSync(generatedDir);
+}
+try {
+    const files = fs.readdirSync(generatedDir);
+    for (const file of files) {
+        if (file !== '.gitkeep') {
+            fs.unlinkSync(path.join(generatedDir, file));
+        }
+    }
+    console.log(`Cleaned up ${files.length} old files from generated directory.`);
+} catch (err) {
+    console.error('Failed to clean up generated directory on startup:', err);
+}
+
 // ── Image helpers ─────────────────────────────────────────────────────────────
 
 /**
@@ -984,6 +1000,17 @@ app.post('/api/papers', async (req, res) => {
             data: { filePath: pdfFileName }
         });
 
+        // Automatically delete the generated files after 5 minutes to prevent disk bloat
+        setTimeout(() => {
+            try {
+                if (fs.existsSync(pdfFilePath)) fs.unlinkSync(pdfFilePath);
+                if (fs.existsSync(wordFilePath)) fs.unlinkSync(wordFilePath);
+                console.log(`Cleaned up generated files: ${pdfFileName}, ${wordFileName}`);
+            } catch (err) {
+                console.error(`Error cleaning up files:`, err);
+            }
+        }, 5 * 60 * 1000);
+
         res.json({
             id: paper.id,
             pdfUrl: `/generated/${encodeURIComponent(pdfFileName)}`,
@@ -1005,6 +1032,7 @@ app.get('/api/papers', async (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://172.27.52.184:${PORT}`);
+    console.log(`Server running - Listening on all network interfaces (0.0.0.0) at port ${PORT}`);
+    console.log(`You can access it locally at http://localhost:${PORT}`);
     console.log('Refined Header Logic Loaded: Bold Address, DD-MM-YYYY Date, Roman numerals');
 });
