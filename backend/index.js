@@ -1034,5 +1034,15 @@ app.get('/api/papers', async (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running - Listening on all network interfaces (0.0.0.0) at port ${PORT}`);
     console.log(`You can access it locally at http://localhost:${PORT}`);
+    
+    const nets = require('os').networkInterfaces();
+    for (const name of Object.keys(nets)) {
+        for (const net of nets[name]) {
+            if (net.family === 'IPv4' && !net.internal) {
+                console.log(`You can access it on your network at http://${net.address}:${PORT}`);
+            }
+        }
+    }
+
     console.log('Refined Header Logic Loaded: Bold Address, DD-MM-YYYY Date, Roman numerals');
 });
